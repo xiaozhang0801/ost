@@ -211,7 +211,7 @@ export default function ShippingRateNew() {
               <InlineStack align="space-between">
                 <Text as="h2" variant="headingMd">目的地</Text>
                 <ButtonGroup>
-                  <Button>导入1</Button>
+                  <Button>导入</Button>
                   <Button>导出</Button>
                 </ButtonGroup>
               </InlineStack>
