@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { useNavigate, useLoaderData } from "@remix-run/react";
+import { useMemo, useState, useEffect, useRef } from "react";
+import { useNavigate, useLoaderData, useFetcher, useRevalidator } from "@remix-run/react";
 import {
   Page,
   Text,
@@ -9,10 +9,14 @@ import {
   Box,
   Checkbox,
   InlineStack,
+  Modal,
+  Banner,
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
+import { json } from "@remix-run/node";
+import { DeleteIcon } from "@shopify/polaris-icons";
 
 export const loader = async ({ request }) => {
   const { admin, session } = await authenticate.admin(request);
@@ -84,7 +88,61 @@ export const loader = async ({ request }) => {
 };
 
 export const action = async ({ request }) => {
-  const { admin } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
+  const shop = session?.shop || null;
+
+  const formData = await request.formData();
+  const intent = formData.get("_action");
+
+  // Handle delete rule
+  if (intent === "delete") {
+    try {
+      if (!shop) {
+        return json({ ok: false, error: "缺少店铺信息" }, { status: 400 });
+      }
+
+      let ids = [];
+      const idsJson = formData.get("ids");
+      const idRaw = formData.get("id");
+      if (idsJson) {
+        try {
+          const parsed = JSON.parse(idsJson);
+          if (Array.isArray(parsed)) ids = parsed;
+        } catch (_) {}
+      } else if (idRaw) {
+        ids = [idRaw];
+      }
+
+      ids = ids
+        .map((v) => {
+          const n = Number(v);
+          return Number.isNaN(n) ? v : n;
+        })
+        .filter((v) => v !== undefined && v !== null);
+
+      if (ids.length === 0) {
+        return json({ ok: false, error: "未提供要删除的ID" }, { status: 400 });
+      }
+
+      // 查找属于当前店铺的规则，避免越权
+      const rules = await prisma.shippingRule.findMany({ where: { id: { in: ids }, shop } });
+      const ruleIds = rules.map((r) => r.id);
+      if (ruleIds.length === 0) {
+        return json({ ok: false, error: "未找到对应规则或无权限" }, { status: 404 });
+      }
+
+      // 先删子表，再删主表
+      await prisma.shippingRange.deleteMany({ where: { ruleId: { in: ruleIds } } });
+      const del = await prisma.shippingRule.deleteMany({ where: { id: { in: ruleIds } } });
+
+      return json({ ok: true, deleted: del.count, requested: ids.length });
+    } catch (e) {
+      console.warn("Delete rule failed", e);
+      return json({ ok: false, error: "删除失败" }, { status: 500 });
+    }
+  }
+
+  // fallback: original demo mutation (kept for reference, not used by UI now)
   const color = ["Red", "Orange", "Yellow", "Green"][
     Math.floor(Math.random() * 4)
   ];
@@ -151,6 +209,13 @@ export const action = async ({ request }) => {
 export default function Index() {
   const data = useLoaderData();
   const navigate = useNavigate();
+  const fetcher = useFetcher();
+  const revalidator = useRevalidator();
+  const pendingDeleteRef = useRef(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleteIds, setDeleteIds] = useState([]);
+  const [bannerMsg, setBannerMsg] = useState(null);
+  const [bannerTone, setBannerTone] = useState("info");
 
   // 国家代码 -> 中文名（找不到则回退为代码）
   const countryNameMap = useMemo(
@@ -238,6 +303,49 @@ export default function Index() {
     navigate("/app/shipping/new", { state: { draft } });
   };
 
+  const onDelete = (ruleId) => {
+    setDeleteIds([String(ruleId)]);
+    setConfirmOpen(true);
+  };
+
+  const onBatchDelete = () => {
+    const ids = Array.from(selected).map((idx) => String(rates[idx]?.id)).filter(Boolean);
+    if (ids.length === 0) return;
+    setDeleteIds(ids);
+    setConfirmOpen(true);
+  };
+
+  const confirmDelete = () => {
+    pendingDeleteRef.current = true;
+    // 支持批量删除
+    const body = { _action: "delete" };
+    if (deleteIds.length === 1) body.id = deleteIds[0];
+    else body.ids = JSON.stringify(deleteIds);
+    fetcher.submit(body, { method: "post" });
+  };
+
+  // 删除完成后，主动触发页面 revalidate，确保列表刷新
+  useEffect(() => {
+    if (pendingDeleteRef.current && fetcher.state === "idle" && fetcher.formData == null) {
+      pendingDeleteRef.current = false;
+      setConfirmOpen(false);
+      const ok = fetcher.data?.ok === true;
+      if (ok) {
+        setBannerTone("success");
+        setBannerMsg(`删除成功：${fetcher.data?.deleted ?? 0} 条`);
+        // 清空选择
+        setSelected(new Set());
+        // 重新拉取数据
+        revalidator.revalidate();
+      } else {
+        setBannerTone("critical");
+        setBannerMsg(fetcher.data?.error || "删除失败");
+      }
+    }
+    // 仅在提交状态变化时检查
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetcher.state]);
+
   return (
     <Page>
       <TitleBar title="Table Rates Shipping" />
@@ -277,14 +385,27 @@ export default function Index() {
             <BlockStack gap="0">
             {/* 工具条 */}
             <Box padding="300" borderBlockEndWidth="025" borderColor="border">
-              <InlineStack gap="300" blockAlign="center">
-                <Checkbox
-                  label=""
-                  checked={allSelected}
-                  indeterminate={someSelected}
-                  onChange={(checked) => toggleAll(checked)}
-                />
-                <Text variant="bodyMd">{rates.length} 条运费规则</Text>
+              <InlineStack align="space-between" blockAlign="center">
+                <InlineStack gap="300" blockAlign="center">
+                  <Checkbox
+                    label=""
+                    checked={allSelected}
+                    indeterminate={someSelected}
+                    onChange={(checked) => toggleAll(checked)}
+                  />
+                  <Text variant="bodyMd">{rates.length} 条运费规则</Text>
+                </InlineStack>
+                {selected.size > 0 && (
+                  <Button
+                    tone="critical"
+                    variant="plain"
+                    icon={DeleteIcon}
+                    onClick={onBatchDelete}
+                    disabled={fetcher.state !== "idle"}
+                  >
+                    删除选中（{selected.size}）
+                  </Button>
+                )}
               </InlineStack>
             </Box>
 
@@ -335,8 +456,17 @@ export default function Index() {
                     </BlockStack>
                   </InlineStack>
 
-                  {/* 右侧：状态 */}
-                  {/* <Badge tone="success">Active</Badge> */}
+                  {/* 右侧：删除图标按钮 */}
+                  <Box onClick={(e) => e.stopPropagation()}>
+                    <Button
+                      variant="plain"
+                      tone="critical"
+                      icon={DeleteIcon}
+                      accessibilityLabel="删除运费规则"
+                      onClick={() => onDelete(rate.id)}
+                      disabled={fetcher.state !== "idle"}
+                    />
+                  </Box>
                 </InlineStack>
                 </Box>
               </div>
@@ -344,6 +474,35 @@ export default function Index() {
           </BlockStack>
         </Card>
         )}
+      {/* 全局结果提示 */}
+      {bannerMsg && (
+        <Box padding="300">
+          <Banner tone={bannerTone} onDismiss={() => setBannerMsg(null)}>
+            {bannerMsg}
+          </Banner>
+        </Box>
+      )}
+
+      {/* 删除确认弹窗 */}
+      <Modal
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        title="确认删除"
+        primaryAction={{
+          content: fetcher.state !== "idle" ? "删除中..." : "删除",
+          destructive: true,
+          onAction: confirmDelete,
+          disabled: fetcher.state !== "idle",
+        }}
+        secondaryActions={[{ content: "取消", onAction: () => setConfirmOpen(false), disabled: fetcher.state !== "idle" }]}
+      >
+        <Box padding="400">
+          <Text as="p" variant="bodyMd">
+            确定删除 {deleteIds.length} 条运费规则吗？该操作不可恢复。
+          </Text>
+        </Box>
+      </Modal>
+
       </BlockStack>
     </Page>
   );
