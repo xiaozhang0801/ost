@@ -30,3 +30,29 @@ model Session {
   collaborator  Boolean?  @default(false)
   emailVerified Boolean?  @default(false)
 }
+
+// Shipping rule saved per shop
+model ShippingRule {
+  id          String          @id @default(cuid())
+  shop        String          // shop domain, e.g., mystore.myshopify.com
+  name        String
+  chargeBy    String          // weight | volume | quantity
+  countries   Json            // array of ISO country codes
+  description String?         
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  ranges      ShippingRange[]
+}
+
+model ShippingRange {
+  id        String   @id @default(cuid())
+  ruleId    String
+  fromVal   Float    // for quantity, we still store as Float but will treat as integer
+  toVal     Float
+  unit      String   // KG | CBM | 件
+  pricePer  Float    // price per unit (RMB per KG/CBM or per 件)
+  fee       Float    // registration fee per shipment (RMB per order)
+  feeUnit   String   // e.g., CNY
+
+  rule      ShippingRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+}

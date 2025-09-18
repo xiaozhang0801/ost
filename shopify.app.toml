@@ -2,7 +2,7 @@
 
 client_id = "be58cea83443888ed4ec553623f7434b"
 name = "ecocj"
-application_url = "https://example.com"
+application_url = "https://triple-lcd-industry-impacts.trycloudflare.com"
 embedded = true
 
 [build]
@@ -22,7 +22,7 @@ api_version = "2025-10"
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-scopes = "write_products"
+scopes = "write_products,read_shipping,write_shipping"
 
 [auth]
-redirect_urls = [ "https://example.com/api/auth" ]
+redirect_urls = [ "https://triple-lcd-industry-impacts.trycloudflare.com/auth/callback" ]

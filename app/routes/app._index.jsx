@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "@remix-run/react";
+import { useNavigate, useLoaderData } from "@remix-run/react";
 import {
   Page,
   Text,
@@ -14,9 +14,57 @@ import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 
 export const loader = async ({ request }) => {
-  await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
 
-  return null;
+  // Ensure CarrierService exists for this shop
+  try {
+    // List all carrier services via generic REST client
+    const listResp = await admin.rest.get({ path: 'carrier_services.json' });
+    const services = listResp?.body?.carrier_services || [];
+    const NAME = "ECOCJ Carrier";
+    const origin = process.env.SHOPIFY_APP_URL && process.env.SHOPIFY_APP_URL.trim().length > 0
+      ? process.env.SHOPIFY_APP_URL
+      : new URL(request.url).origin;
+    const callbackUrl = `${origin}/api/carrier/callback`;
+
+    const exists = services.find((s) => (s?.name || s?.service_name) === NAME);
+    if (!exists) {
+      await admin.rest.post({
+        path: 'carrier_services.json',
+        data: {
+          carrier_service: {
+            name: NAME,
+            callback_url: callbackUrl,
+            service_discovery: true,
+          },
+        },
+        type: 'application/json',
+      });
+    } else {
+      // Optionally keep callback up-to-date
+      const id = exists.id || exists.admin_graphql_api_id || exists?.carrier_service?.id;
+      try {
+        await admin.rest.put({
+          path: `carrier_services/${id}.json`,
+          data: {
+            carrier_service: {
+              name: NAME,
+              callback_url: callbackUrl,
+              service_discovery: true,
+            },
+          },
+          type: 'application/json',
+        });
+      } catch (_) {
+        // ignore update failure
+      }
+    }
+  } catch (e) {
+    // Fail silently to not block app UI
+    console.warn("CarrierService ensure failed", e);
+  }
+
+  return { shop: session?.shop || null };
 };
 
 export const action = async ({ request }) => {
@@ -85,6 +133,7 @@ export const action = async ({ request }) => {
 };
 
 export default function Index() {
+  const data = useLoaderData();
   const navigate = useNavigate();
   // 模拟运费模板数据
   const rates = useMemo(
@@ -210,9 +259,8 @@ export default function Index() {
             </Badge> */}
           </InlineStack>
           <InlineStack gap="300" blockAlign="center">
-            {/* <Link url="#" removeUnderline>
-              Plans
-            </Link> */}
+            <Button url={`/app/api/carriers${data?.shop ? `?shop=${encodeURIComponent(data.shop)}` : ""}`}>查看 CarrierService</Button>
+            <Button url={`/app/api/carriers/ensure${data?.shop ? `?shop=${encodeURIComponent(data.shop)}` : ""}`}>强制创建 CarrierService</Button>
             <Button variant="primary" url="/app/shipping/new">添加运费规则</Button>
           </InlineStack>
         </InlineStack>

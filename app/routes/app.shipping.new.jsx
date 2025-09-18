@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useLoaderData, useLocation } from "@remix-run/react";
+import { useLoaderData, useLocation, useNavigate } from "@remix-run/react";
 import {
   Page,
   Card,
@@ -50,8 +50,8 @@ export const loader = async ({ request }) => {
 export default function ShippingRateNew() {
   const { countries } = useLoaderData();
   const location = useLocation();
+  const navigate = useNavigate();
   const draft = location?.state?.draft;
-  const [calcType, setCalcType] = useState("custom");
   const [chargeBy, setChargeBy] = useState("weight");
   const [ruleName, setRuleName] = useState("");
   // 多选国家/地区
@@ -86,7 +86,6 @@ export default function ShippingRateNew() {
   useEffect(() => {
     if (!draft) return;
     if (typeof draft.ruleName === "string") setRuleName(draft.ruleName);
-    if (typeof draft.calcType === "string") setCalcType(draft.calcType);
     if (typeof draft.chargeBy === "string") setChargeBy(draft.chargeBy);
     if (Array.isArray(draft.countriesSelected)) setCountriesSelected(draft.countriesSelected);
     if (Array.isArray(draft.ranges) && draft.ranges.length) {
@@ -194,10 +193,42 @@ export default function ShippingRateNew() {
     setRanges((r) => r.map((it) => ({ ...it, unit: newUnit })));
   }, [isWeight, isVolume, isQuantity]);
 
-  const save = () => {
-    // TODO: 提交保存逻辑（调用后端 API）
-    // 目前仅作为占位
-    console.log({ ruleName, countriesSelected, calcType, chargeBy, ranges });
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
+    if (!ruleName || !Array.isArray(ranges) || ranges.length === 0) return;
+    try {
+      setSaving(true);
+      const payload = {
+        name: ruleName,
+        chargeBy,
+        countries: countriesSelected,
+        description: null,
+        ranges: (ranges || []).map((r) => ({
+          from: r.from,
+          to: r.to,
+          unit: r.unit,
+          pricePer: r.pricePer,
+          fee: r.fee,
+          feeUnit: r.feeUnit || "CNY",
+        })),
+      };
+      const resp = await fetch("/api/shipping/rules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!resp.ok) {
+        const t = await resp.text();
+        throw new Error(t || `保存失败(${resp.status})`);
+      }
+      // 保存成功后返回列表页
+      navigate("/app");
+    } catch (e) {
+      console.error("保存运费规则失败", e);
+      alert("保存失败，请重试");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -404,7 +435,7 @@ export default function ShippingRateNew() {
 
               <InlineStack gap="300" align="end">
                 <Button url="/app">取消</Button>
-                <Button variant="primary" onClick={save} disabled={(rangeErrors || []).some((e) => e && e.toError)}>
+                <Button variant="primary" onClick={save} disabled={saving || (rangeErrors || []).some((e) => e && e.toError)}>
                   保存
                 </Button>
               </InlineStack>
