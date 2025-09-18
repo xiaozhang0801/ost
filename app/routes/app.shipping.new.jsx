@@ -19,8 +19,17 @@ import {
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 
+// 简易内存缓存：避免每次进入页面都请求外部接口
+let __countries_cache = null;
+let __countries_cache_at = 0;
+const COUNTRIES_TTL_MS = 24 * 60 * 60 * 1000; // 24小时
+
 export const loader = async ({ request }) => {
   await authenticate.admin(request);
+  const now = Date.now();
+  if (__countries_cache && now - __countries_cache_at < COUNTRIES_TTL_MS) {
+    return { countries: __countries_cache };
+  }
   try {
     const res = await fetch(
       "https://restcountries.com/v3.1/all?fields=name,cca2",
@@ -30,6 +39,8 @@ export const loader = async ({ request }) => {
       .map((c) => ({ label: c?.name?.common || c?.cca2 || "Unknown", value: c?.cca2 || "" }))
       .filter((o) => o.value)
       .sort((a, b) => a.label.localeCompare(b.label));
+    __countries_cache = countries;
+    __countries_cache_at = now;
     return { countries };
   } catch (e) {
     // 回退到常见国家列表
@@ -43,6 +54,8 @@ export const loader = async ({ request }) => {
       { label: "France", value: "FR" },
       { label: "Japan", value: "JP" },
     ];
+    __countries_cache = countries;
+    __countries_cache_at = now;
     return { countries };
   }
 };

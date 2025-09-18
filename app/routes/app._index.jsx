@@ -210,6 +210,15 @@ export default function Index() {
   const data = useLoaderData();
   const navigate = useNavigate();
   const fetcher = useFetcher();
+  // 预取“新建/编辑”页的 loader，减少跳转等待
+  const prefetcher = useFetcher();
+  useEffect(() => {
+    // 首次进入时后台预取一次（不影响 UI）
+    if (prefetcher.state === "idle" && !prefetcher.data) {
+      prefetcher.load("/app/shipping/new");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const revalidator = useRevalidator();
   const pendingDeleteRef = useRef(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -217,23 +226,7 @@ export default function Index() {
   const [bannerMsg, setBannerMsg] = useState(null);
   const [bannerTone, setBannerTone] = useState("info");
 
-  // 国家代码 -> 中文名（找不到则回退为代码）
-  const countryNameMap = useMemo(
-    () => ({
-      US: "美国",
-      CA: "加拿大",
-      CN: "中国",
-      GB: "英国",
-      DE: "德国",
-      FR: "法国",
-      AU: "澳大利亚",
-      JP: "日本",
-      HK: "中国香港",
-      MO: "中国澳门",
-      TW: "中国台湾",
-    }),
-    [],
-  );
+  // 国家代码直接显示英文代码，不做中文映射
 
   // 将后端规则转换为前端显示用结构
   const rates = useMemo(() => {
@@ -363,7 +356,14 @@ export default function Index() {
           <InlineStack gap="300" blockAlign="center">
             <Button url={`/app/api/carriers${data?.shop ? `?shop=${encodeURIComponent(data.shop)}` : ""}`}>查看 CarrierService</Button>
             <Button url={`/app/api/carriers/ensure${data?.shop ? `?shop=${encodeURIComponent(data.shop)}` : ""}`}>强制创建 CarrierService</Button>
-            <Button variant="primary" url="/app/shipping/new">添加运费规则</Button>
+            <Button
+              variant="primary"
+              url="/app/shipping/new"
+              onMouseEnter={() => prefetcher.load("/app/shipping/new")}
+              onFocus={() => prefetcher.load("/app/shipping/new")}
+            >
+              添加运费规则
+            </Button>
           </InlineStack>
         </InlineStack>
 
@@ -374,7 +374,14 @@ export default function Index() {
               <BlockStack gap="300">
                 <Text as="p" variant="bodyMd">暂时没有运费规则。</Text>
                 <InlineStack gap="300">
-                  <Button variant="primary" url="/app/shipping/new">立即添加运费规则</Button>
+                  <Button
+                    variant="primary"
+                    url="/app/shipping/new"
+                    onMouseEnter={() => prefetcher.load("/app/shipping/new")}
+                    onFocus={() => prefetcher.load("/app/shipping/new")}
+                  >
+                    立即添加运费规则
+                  </Button>
                   <Button url={`/app/api/carriers${data?.shop ? `?shop=${encodeURIComponent(data.shop)}` : ""}`}>查看 CarrierService</Button>
                 </InlineStack>
               </BlockStack>
@@ -448,9 +455,7 @@ export default function Index() {
                       <Text as="p" variant="bodySm">
                         国家/地区：
                         {Array.isArray(rate.countriesSelected) && rate.countriesSelected.length > 0
-                          ? rate.countriesSelected
-                              .map((c) => countryNameMap[c] || c)
-                              .join("，")
+                          ? rate.countriesSelected.join("，")
                           : "未设置"}
                       </Text>
                     </BlockStack>
