@@ -12,9 +12,11 @@ import {
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
+import prisma from "../db.server";
 
 export const loader = async ({ request }) => {
   const { admin, session } = await authenticate.admin(request);
+  const shop = session?.shop || null;
 
   // Ensure CarrierService exists for this shop
   try {
@@ -64,7 +66,21 @@ export const loader = async ({ request }) => {
     console.warn("CarrierService ensure failed", e);
   }
 
-  return { shop: session?.shop || null };
+  // Load backend shipping rules for this shop
+  let rules = [];
+  if (shop) {
+    try {
+      rules = await prisma.shippingRule.findMany({
+        where: { shop },
+        include: { ranges: true },
+        orderBy: { createdAt: 'desc' },
+      });
+    } catch (e) {
+      console.warn('Load rules failed', e);
+    }
+  }
+
+  return { shop, rules };
 };
 
 export const action = async ({ request }) => {
@@ -135,68 +151,46 @@ export const action = async ({ request }) => {
 export default function Index() {
   const data = useLoaderData();
   const navigate = useNavigate();
-  // 模拟运费模板数据
-  const rates = useMemo(
-    () => [
-      {
-        title: "美国运费",
-        description: "空运",
-        calcType: "custom",
-        chargeBy: "weight",
-        countriesSelected: ["US", "CA"],
-        ranges: [
-          { from: "0", to: "0.5", unit: "KG", pricePer: "120", fee: "20", feeUnit: "CNY" },
-          { from: "0.5", to: "1", unit: "KG", pricePer: "110", fee: "20", feeUnit: "CNY" },
-        ],
-      },
-      {
-        title: "内地运费",
-        description: "顺丰",
-        calcType: "custom",
-        chargeBy: "volume",
-        countriesSelected: ["GB", "DE", "FR"],
-        ranges: [
-          { from: "0", to: "0.1", unit: "CBM", pricePer: "800", fee: "30", feeUnit: "CNY" },
-          { from: "0.1", to: "0.2", unit: "CBM", pricePer: "750", fee: "30", feeUnit: "CNY" },
-        ],
-      },
-      {
-        title: "港澳运费",
-        description:
-          "空运",
-        calcType: "custom",
-        chargeBy: "quantity",
-        countriesSelected: ["AU", "JP"],
-        ranges: [
-          { from: "1", to: "5", unit: "件", pricePer: "30", fee: "10", feeUnit: "CNY" },
-          { from: "6", to: "10", unit: "件", pricePer: "28", fee: "10", feeUnit: "CNY" },
-        ],
-      },
-      {
-        title: "国际运费",
-        description:
-          "海运",
-        calcType: "fixed",
-        chargeBy: "weight",
-        countriesSelected: ["US"],
-        ranges: [
-          { from: "0", to: "1", unit: "KG", pricePer: "95", fee: "15", feeUnit: "CNY" },
-        ],
-      },
-      {
-        title: "欧洲运费",
-        description: "海运",
-        calcType: "custom",
-        chargeBy: "weight",
-        countriesSelected: ["CN"],
-        ranges: [
-          { from: "0", to: "0.2", unit: "KG", pricePer: "130", fee: "12", feeUnit: "CNY" },
-          { from: "0.2", to: "0.5", unit: "KG", pricePer: "115", fee: "12", feeUnit: "CNY" },
-        ],
-      },
-    ],
+
+  // 国家代码 -> 中文名（找不到则回退为代码）
+  const countryNameMap = useMemo(
+    () => ({
+      US: "美国",
+      CA: "加拿大",
+      CN: "中国",
+      GB: "英国",
+      DE: "德国",
+      FR: "法国",
+      AU: "澳大利亚",
+      JP: "日本",
+      HK: "中国香港",
+      MO: "中国澳门",
+      TW: "中国台湾",
+    }),
     [],
   );
+
+  // 将后端规则转换为前端显示用结构
+  const rates = useMemo(() => {
+    const rules = Array.isArray(data?.rules) ? data.rules : [];
+    return rules.map((r) => ({
+      id: r.id,
+      title: r.name,
+      description: r.description || "",
+      chargeBy: r.chargeBy,
+      countriesSelected: Array.isArray(r.countries) ? r.countries : [],
+      ranges: Array.isArray(r.ranges)
+        ? r.ranges.map((rg) => ({
+            from: String(rg.fromVal),
+            to: String(rg.toVal),
+            unit: rg.unit,
+            pricePer: String(rg.pricePer),
+            fee: String(rg.fee),
+            feeUnit: rg.feeUnit,
+          }))
+        : [],
+    }));
+  }, [data?.rules]);
 
   // 选择状态
   const [selected, setSelected] = useState(new Set());
@@ -265,9 +259,22 @@ export default function Index() {
           </InlineStack>
         </InlineStack>
 
-        {/* 列表卡片 */}
-        <Card>
-          <BlockStack gap="0">
+        {/* 列表卡片 / 空状态 */}
+        {rates.length === 0 ? (
+          <Card>
+            <Box padding="400">
+              <BlockStack gap="300">
+                <Text as="p" variant="bodyMd">暂时没有运费规则。</Text>
+                <InlineStack gap="300">
+                  <Button variant="primary" url="/app/shipping/new">立即添加运费规则</Button>
+                  <Button url={`/app/api/carriers${data?.shop ? `?shop=${encodeURIComponent(data.shop)}` : ""}`}>查看 CarrierService</Button>
+                </InlineStack>
+              </BlockStack>
+            </Box>
+          </Card>
+        ) : (
+          <Card>
+            <BlockStack gap="0">
             {/* 工具条 */}
             <Box padding="300" borderBlockEndWidth="025" borderColor="border">
               <InlineStack gap="300" blockAlign="center">
@@ -316,6 +323,15 @@ export default function Index() {
                       <Text as="p" variant="bodySm" tone="subdued">
                         {rate.description}
                       </Text>
+                      {/* 国家/地区展示 */}
+                      <Text as="p" variant="bodySm">
+                        国家/地区：
+                        {Array.isArray(rate.countriesSelected) && rate.countriesSelected.length > 0
+                          ? rate.countriesSelected
+                              .map((c) => countryNameMap[c] || c)
+                              .join("，")
+                          : "未设置"}
+                      </Text>
                     </BlockStack>
                   </InlineStack>
 
@@ -327,6 +343,7 @@ export default function Index() {
             ))}
           </BlockStack>
         </Card>
+        )}
       </BlockStack>
     </Page>
   );
