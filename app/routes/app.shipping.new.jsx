@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useLoaderData, useLocation, useNavigate } from "@remix-run/react";
 import {
   Page,
@@ -15,6 +15,7 @@ import {
   Autocomplete,
   Tag,
   ButtonGroup,
+  Banner,
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
@@ -91,6 +92,61 @@ export default function ShippingRateNew() {
 
   // 导出：仅在有 ruleId 的详情页可用
   const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef(null);
+  const [notice, setNotice] = useState({ active: false, message: "", tone: "success" });
+  const showNotice = (message, tone = "success") => setNotice({ active: true, message, tone });
+
+  const onImportClick = () => {
+    if (!ruleId) {
+      showNotice("请先保存规则以生成 ID，再使用导入", "critical");
+      return;
+    }
+    fileInputRef.current?.click();
+  };
+
+  const onFileChange = async (e) => {
+    const file = e?.target?.files?.[0];
+    if (!file || !ruleId) return;
+    try {
+      setImporting(true);
+      const form = new FormData();
+      form.append("file", file);
+      const resp = await fetch(`/api/shipping/import/${encodeURIComponent(ruleId)}`, {
+        method: "POST",
+        body: form,
+      });
+      if (!resp.ok) {
+        const t = await resp.text();
+        throw new Error(t || `导入失败(${resp.status})`);
+      }
+      const data = await resp.json();
+      const rule = data?.rule || {};
+      // 按要求：规则名称不变，仅按文件更新其他字段
+      if (typeof rule.chargeBy === "string") setChargeBy(rule.chargeBy);
+      if (Array.isArray(rule.countries)) setCountriesSelected(rule.countries);
+      if (Array.isArray(rule.ranges)) {
+        setRanges(
+          rule.ranges.map((r) => ({
+            from: r?.fromVal ?? r?.from ?? "",
+            to: r?.toVal ?? r?.to ?? "",
+            unit: r?.unit ?? (rule.chargeBy === "volume" ? "CBM" : rule.chargeBy === "quantity" ? "件" : "KG"),
+            pricePer: r?.pricePer ?? "",
+            fee: r?.fee ?? "",
+            feeUnit: r?.feeUnit ?? "CNY",
+          }))
+        );
+      }
+      // 清空文件选择，避免同名文件无法再次选择
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      showNotice("导入成功：已更新表单，尚未保存到数据库", "success");
+    } catch (err) {
+      console.error("导入失败", err);
+      showNotice("导入失败，请检查文件格式并重试", "critical");
+    } finally {
+      setImporting(false);
+    }
+  };
   const exportRule = async () => {
     if (!ruleId) return;
     try {
@@ -118,7 +174,7 @@ export default function ShippingRateNew() {
       URL.revokeObjectURL(url);
     } catch (e) {
       console.error("导出失败", e);
-      alert("导出失败，请稍后重试");
+      showNotice("导出失败，请稍后重试", "critical");
     } finally {
       setExporting(false);
     }
@@ -271,7 +327,7 @@ export default function ShippingRateNew() {
       navigate("/app");
     } catch (e) {
       console.error("保存运费规则失败", e);
-      alert("保存失败，请重试");
+      showNotice("保存失败，请重试", "critical");
     } finally {
       setSaving(false);
     }
@@ -281,6 +337,11 @@ export default function ShippingRateNew() {
     <Page>
       <TitleBar title={ruleId ? "编辑运费规则" : "添加运费规则"} />
       <BlockStack gap="500">
+        {notice.active ? (
+          <Banner tone={notice.tone} onDismiss={() => setNotice((n) => ({ ...n, active: false }))}>
+            {notice.message}
+          </Banner>
+        ) : null}
         <InlineGrid columns={["280px", "1fr"]} gap="300">
           {/* 左侧：目的地 */}
           <Card>
@@ -289,11 +350,19 @@ export default function ShippingRateNew() {
                 <Text as="h2" variant="headingMd">目的地</Text>
                 {ruleId ? (
                   <ButtonGroup>
-                    <Button>导入</Button>
+                    <Button onClick={onImportClick} loading={importing}>导入</Button>
                     <Button onClick={exportRule} loading={exporting}>导出</Button>
                   </ButtonGroup>
                 ) : null}
               </InlineStack>
+              {/* 隐藏的文件输入用于触发导入 */}
+              <input
+                ref={fileInputRef}
+                onChange={onFileChange}
+                type="file"
+                accept=".xls,application/vnd.ms-excel,application/xml,.xml"
+                style={{ position: "absolute", left: "-9999px", width: 1, height: 1, opacity: 0 }}
+              />
               <BlockStack gap="200">
                 <Text as="span" variant="bodySm">国家/地区</Text>
                 <InlineStack align="space-between">
