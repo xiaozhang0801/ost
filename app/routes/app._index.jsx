@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useRef } from "react";
-import { useNavigate, useLoaderData, useFetcher, useRevalidator } from "@remix-run/react";
+import { useNavigate, useLoaderData, useFetcher, useRevalidator, useLocation } from "@remix-run/react";
 import {
   Page,
   Text,
@@ -209,6 +209,7 @@ export const action = async ({ request }) => {
 export default function Index() {
   const data = useLoaderData();
   const navigate = useNavigate();
+  const location = useLocation();
   const fetcher = useFetcher();
   // 预取“新建/编辑”页的 loader，减少跳转等待
   const prefetcher = useFetcher();
@@ -225,6 +226,17 @@ export default function Index() {
   const [deleteIds, setDeleteIds] = useState([]);
   const [bannerMsg, setBannerMsg] = useState(null);
   const [bannerTone, setBannerTone] = useState("info");
+
+  // 接收来自保存页面的 toast 状态并显示 Banner，随后清除一次性状态
+  useEffect(() => {
+    const toast = location?.state?.toast;
+    if (toast) {
+      setBannerTone(toast.tone || "success");
+      setBannerMsg(toast.message || "操作成功");
+      // 清除一次性状态，避免刷新/返回时重复出现
+      navigate(".", { replace: true, state: null });
+    }
+  }, [location?.state, navigate]);
 
   // 国家代码直接显示英文代码，不做中文映射
 
@@ -289,8 +301,8 @@ export default function Index() {
       ranges: Array.isArray(rate.ranges) && rate.ranges.length
         ? rate.ranges
         : [
-            { from: "0", to: "0.5", unit: "KG", pricePer: "100", fee: "20", feeUnit: "CNY" },
-            { from: "0.5", to: "1", unit: "KG", pricePer: "90", fee: "20", feeUnit: "CNY" },
+            { from: "0", to: "0.5", unit: "KG", pricePer: "100", fee: "20", feeUnit: "USD" },
+            { from: "0.5", to: "1", unit: "KG", pricePer: "90", fee: "20", feeUnit: "USD" },
           ],
       description: rate.description || "",
     };
@@ -344,6 +356,14 @@ export default function Index() {
     <Page>
       <TitleBar title="Table Rates Shipping" />
       <BlockStack gap="500">
+        {/* 全局结果提示（置于标题上方） */}
+        {bannerMsg && (
+          <Box padding="300">
+            <Banner tone={bannerTone} onDismiss={() => setBannerMsg(null)}>
+              {bannerMsg}
+            </Banner>
+          </Box>
+        )}
         {/* 顶部标题与操作区 */}
         <InlineStack align="space-between" blockAlign="center">
           <InlineStack gap="300" blockAlign="center">
@@ -480,15 +500,6 @@ export default function Index() {
           </BlockStack>
         </Card>
         )}
-      {/* 全局结果提示 */}
-      {bannerMsg && (
-        <Box padding="300">
-          <Banner tone={bannerTone} onDismiss={() => setBannerMsg(null)}>
-            {bannerMsg}
-          </Banner>
-        </Box>
-      )}
-
       {/* 删除确认弹窗 */}
       <Modal
         open={confirmOpen}

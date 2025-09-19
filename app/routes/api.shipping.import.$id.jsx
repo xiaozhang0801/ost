@@ -125,7 +125,7 @@ export const action = async ({ request, params }) => {
     const unit = String(r[idx.unit] || unitDefault).trim() || unitDefault;
     const pricePer = Number(r[idx.additionalFee] ?? 0);
     const fee = Number(r[idx.baseFee] ?? 0);
-    const feeUnit = String(r[idx.currencyUnit] || "CNY").trim() || "CNY";
+    const feeUnit = String(r[idx.currencyUnit] || "USD").trim() || "USD";
     return { fromVal, toVal, unit, pricePer, fee, feeUnit };
   }).sort((a, b) => (a.fromVal - b.fromVal) || (a.toVal - b.toVal));
 

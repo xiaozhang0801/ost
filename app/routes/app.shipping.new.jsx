@@ -139,7 +139,7 @@ export default function ShippingRateNew() {
             unit: r?.unit ?? (rule.chargeBy === "volume" ? "CBM" : rule.chargeBy === "quantity" ? "件" : "KG"),
             pricePer: r?.pricePer ?? "",
             fee: r?.fee ?? "",
-            feeUnit: r?.feeUnit ?? "CNY",
+            feeUnit: r?.feeUnit ?? "USD",
           }))
         );
       }
@@ -203,7 +203,7 @@ export default function ShippingRateNew() {
           unit: r?.unit ?? (draft.chargeBy === "volume" ? "CBM" : draft.chargeBy === "quantity" ? "件" : "KG"),
           pricePer: r?.pricePer ?? "",
           fee: r?.fee ?? "",
-          feeUnit: r?.feeUnit ?? "CNY",
+          feeUnit: r?.feeUnit ?? "USD",
         }))
       );
     }
@@ -291,7 +291,7 @@ export default function ShippingRateNew() {
         unit: isWeight ? "KG" : isVolume ? "CBM" : "件",
         pricePer: "",
         fee: "",
-        feeUnit: "CNY",
+        feeUnit: "USD",
       },
     ]);
   const removeRange = (idx) =>
@@ -331,7 +331,7 @@ export default function ShippingRateNew() {
           unit: r.unit,
           pricePer: r.pricePer,
           fee: r.fee,
-          feeUnit: r.feeUnit || "CNY",
+          feeUnit: r.feeUnit || "USD",
         })),
       };
       const resp = await fetch("/api/shipping/rules", {
@@ -343,8 +343,8 @@ export default function ShippingRateNew() {
         const t = await resp.text();
         throw new Error(t || `保存失败(${resp.status})`);
       }
-      // 保存成功后返回列表页
-      navigate("/app");
+      // 保存成功后返回列表页，并传递一次性提示信息
+      navigate("/app", { state: { toast: { message: "保存成功", tone: "success" } } });
     } catch (e) {
       console.error("保存运费规则失败", e);
       showNotice("保存失败，请重试", "critical");
@@ -530,7 +530,7 @@ export default function ShippingRateNew() {
 
                       <InlineStack gap="300">
                         <BlockStack gap="100">
-                          <Text tone="critical" as="span" variant="bodySm">{`运费(RMB/${priceUnit})`}</Text>
+                          <Text tone="critical" as="span" variant="bodySm">{`运费(USD/${priceUnit})`}</Text>
                           <TextField
                             label="运费"
                             labelHidden
@@ -540,12 +540,12 @@ export default function ShippingRateNew() {
                           />
                         </BlockStack>
                         <BlockStack gap="100">
-                          <Text tone="critical" as="span" variant="bodySm">挂号费(RMB/票)</Text>
+                          <Text tone="critical" as="span" variant="bodySm">挂号费(USD/票)</Text>
                           <InlineStack gap="200">
                             <Select
                               label="币种"
                               labelHidden
-                              options={[{ label: "CNY", value: "CNY" }]}
+                              options={[{ label: "USD", value: "USD" }]}
                               value={rng.feeUnit}
                               onChange={(v) => updateRange(idx, "feeUnit", v)}
                             />

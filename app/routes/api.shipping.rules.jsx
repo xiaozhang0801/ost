@@ -87,7 +87,7 @@ export const action = async ({ request }) => {
         unit: r.unit || (chargeBy === "volume" ? "CBM" : chargeBy === "quantity" ? "件" : "KG"),
         pricePer: Number(r.pricePer ?? 0),
         fee: Number(r.fee ?? 0),
-        feeUnit: r.feeUnit || "CNY",
+        feeUnit: r.feeUnit || "USD",
       }))
       .sort((a, b) => (a.fromVal - b.fromVal) || (a.toVal - b.toVal));
 
@@ -120,7 +120,7 @@ export const action = async ({ request }) => {
       unit: r.unit || (chargeBy === "volume" ? "CBM" : chargeBy === "quantity" ? "件" : "KG"),
       pricePer: Number(r.pricePer ?? 0),
       fee: Number(r.fee ?? 0),
-      feeUnit: r.feeUnit || "CNY",
+      feeUnit: r.feeUnit || "USD",
     }))
     .sort((a, b) => (a.fromVal - b.fromVal) || (a.toVal - b.toVal));
 

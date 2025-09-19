@@ -77,7 +77,7 @@ export const action = async ({ request }) => {
 
   // payload example fields: rate (items with grams), destination (country), currency, etc.
   const destinationCountry = payload?.rate?.destination?.country || payload?.rate?.destination?.country_code;
-  const currency = payload?.rate?.currency || "CNY";
+  const currency = payload?.rate?.currency || "USD";
 
   // Aggregate weight (kg), quantity (pcs)
   const items = Array.isArray(payload?.rate?.items) ? payload.rate.items : [];
@@ -136,12 +136,12 @@ export const action = async ({ request }) => {
     // price = pricePer * value + fee
     const priceRmb = Number(matchedRange.pricePer) * Number(valueInMatchedUnit) + Number(matchedRange.fee);
 
-    // For simplicity: return currency as CNY, Shopify will display according to shop settings; Alternatively convert if needed
+    // For simplicity: return currency as USD, Shopify will display according to shop settings; Alternatively convert if needed
     rates.push({
       service_name: rule.name,
       service_code: `ECOCJ_${rule.id.slice(-6)}`,
       total_price: Math.max(0, Math.round(priceRmb * 100)).toString(), // cents
-      currency: currency || matchedRange.feeUnit || "CNY",
+      currency: currency || matchedRange.feeUnit || "USD",
       description: rule.description || `${measure} based rate`,
       // min/max delivery date optional
     });
