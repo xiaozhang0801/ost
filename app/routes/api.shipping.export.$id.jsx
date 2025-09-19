@@ -52,7 +52,11 @@ export const loader = async ({ request, params }) => {
     : [];
   const countriesCell = countries.join("|"); // 用 | 连接，导入时再拆
 
-  const rows = [headers, ...rule.ranges.map((r) => [
+  // 导出前按 fromVal、toVal 升序排序，统一顺序
+  const sortedRanges = [...(Array.isArray(rule.ranges) ? rule.ranges : [])]
+    .sort((a, b) => (Number(a.fromVal) - Number(b.fromVal)) || (Number(a.toVal) - Number(b.toVal)));
+
+  const rows = [headers, ...sortedRanges.map((r) => [
     rule.chargeBy,
     countriesCell,
     r.fromVal,

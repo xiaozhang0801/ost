@@ -79,6 +79,18 @@ export const action = async ({ request }) => {
     }
 
     // 事务：更新主表，重建子表 ranges
+    // 先对 ranges 做标准化与排序（fromVal 升序，若相同再按 toVal 升序）
+    const normalizedSortedRanges = (Array.isArray(ranges) ? ranges : [])
+      .map((r) => ({
+        fromVal: Number(r.from ?? r.fromVal ?? 0),
+        toVal: Number(r.to ?? r.toVal ?? 0),
+        unit: r.unit || (chargeBy === "volume" ? "CBM" : chargeBy === "quantity" ? "件" : "KG"),
+        pricePer: Number(r.pricePer ?? 0),
+        fee: Number(r.fee ?? 0),
+        feeUnit: r.feeUnit || "CNY",
+      }))
+      .sort((a, b) => (a.fromVal - b.fromVal) || (a.toVal - b.toVal));
+
     const [, updated] = await prisma.$transaction([
       prisma.shippingRange.deleteMany({ where: { ruleId: id } }),
       prisma.shippingRule.update({
@@ -89,14 +101,7 @@ export const action = async ({ request }) => {
           countries: normalizedCountries,
           description,
           ranges: {
-            create: ranges.map((r) => ({
-              fromVal: Number(r.from ?? r.fromVal ?? 0),
-              toVal: Number(r.to ?? r.toVal ?? 0),
-              unit: r.unit || (chargeBy === "volume" ? "CBM" : chargeBy === "quantity" ? "件" : "KG"),
-              pricePer: Number(r.pricePer ?? 0),
-              fee: Number(r.fee ?? 0),
-              feeUnit: r.feeUnit || "CNY",
-            })),
+            create: normalizedSortedRanges,
           },
         },
         include: { ranges: true },
@@ -107,6 +112,18 @@ export const action = async ({ request }) => {
   }
 
   // 否则：创建
+  // 创建前同样做标准化与排序
+  const normalizedSortedRangesCreate = (Array.isArray(ranges) ? ranges : [])
+    .map((r) => ({
+      fromVal: Number(r.from ?? r.fromVal ?? 0),
+      toVal: Number(r.to ?? r.toVal ?? 0),
+      unit: r.unit || (chargeBy === "volume" ? "CBM" : chargeBy === "quantity" ? "件" : "KG"),
+      pricePer: Number(r.pricePer ?? 0),
+      fee: Number(r.fee ?? 0),
+      feeUnit: r.feeUnit || "CNY",
+    }))
+    .sort((a, b) => (a.fromVal - b.fromVal) || (a.toVal - b.toVal));
+
   const rule = await prisma.shippingRule.create({
     data: {
       shop,
@@ -115,14 +132,7 @@ export const action = async ({ request }) => {
       countries: normalizedCountries,
       description,
       ranges: {
-        create: ranges.map((r) => ({
-          fromVal: Number(r.from ?? r.fromVal ?? 0),
-          toVal: Number(r.to ?? r.toVal ?? 0),
-          unit: r.unit || (chargeBy === "volume" ? "CBM" : chargeBy === "quantity" ? "件" : "KG"),
-          pricePer: Number(r.pricePer ?? 0),
-          fee: Number(r.fee ?? 0),
-          feeUnit: r.feeUnit || "CNY",
-        })),
+        create: normalizedSortedRangesCreate,
       },
     },
     include: { ranges: true },

@@ -94,7 +94,13 @@ export const action = async ({ request }) => {
     const value = measure === "weight" ? totalKg : measure === "volume" ? totalCbm : totalQty;
 
     // Find first matching range
-    const range = rule.ranges.find((rg) => value >= Number(rg.fromVal) && value <= Number(rg.toVal));
+    // 为了让边界值（例如相邻区间的交界点）优先匹配“前一个区间”，
+    // 这里先按 fromVal 升序排序后再查找，这样 [0,10]、[10,20] 且都为闭区间时，value=10 会命中前者。
+    const sortedRanges = [...(Array.isArray(rule.ranges) ? rule.ranges : [])]
+      .sort((a, b) => Number(a.fromVal) - Number(b.fromVal));
+    const range = sortedRanges.find(
+      (rg) => value >= Number(rg.fromVal) && value <= Number(rg.toVal)
+    );
     if (!range) continue;
 
     // price = pricePer * value + fee
