@@ -281,6 +281,7 @@ export default function Index() {
   // 打开编辑（新建）页面，并传递可编辑草稿数据
   const openEdit = (rate) => {
     const draft = {
+      id: rate.id,
       ruleName: rate.title || "",
       calcType: rate.calcType || "custom",
       chargeBy: rate.chargeBy || "weight",

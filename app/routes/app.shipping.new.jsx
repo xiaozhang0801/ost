@@ -65,12 +65,11 @@ export default function ShippingRateNew() {
   const location = useLocation();
   const navigate = useNavigate();
   const draft = location?.state?.draft;
+  const [ruleId, setRuleId] = useState("");
   const [chargeBy, setChargeBy] = useState("weight");
   const [ruleName, setRuleName] = useState("");
   // 多选国家/地区
-  const [countriesSelected, setCountriesSelected] = useState(
-    countries?.[0]?.value ? [countries[0].value] : []
-  );
+  const [countriesSelected, setCountriesSelected] = useState([]);
   const [countryInput, setCountryInput] = useState("");
 
   // 多选辅助方法
@@ -90,14 +89,12 @@ export default function ShippingRateNew() {
     return parts.every((p) => hay.includes(p));
   };
 
-  const [ranges, setRanges] = useState([
-    { from: "0", to: "0.1", unit: "KG", pricePer: "118", fee: "24", feeUnit: "CNY" },
-    { from: "0.1", to: "0.2", unit: "KG", pricePer: "111", fee: "22", feeUnit: "CNY" },
-  ]);
+  const [ranges, setRanges] = useState([]);
 
   // 初次进入时，如有草稿则预填表单
   useEffect(() => {
     if (!draft) return;
+    if (typeof draft.id === "string") setRuleId(draft.id);
     if (typeof draft.ruleName === "string") setRuleName(draft.ruleName);
     if (typeof draft.chargeBy === "string") setChargeBy(draft.chargeBy);
     if (Array.isArray(draft.countriesSelected)) setCountriesSelected(draft.countriesSelected);
@@ -212,6 +209,7 @@ export default function ShippingRateNew() {
     try {
       setSaving(true);
       const payload = {
+        ...(ruleId ? { id: ruleId } : {}),
         name: ruleName,
         chargeBy,
         countries: countriesSelected,
@@ -246,7 +244,7 @@ export default function ShippingRateNew() {
 
   return (
     <Page>
-      <TitleBar title="添加运费规则" />
+      <TitleBar title={ruleId ? "编辑运费规则" : "添加运费规则"} />
       <BlockStack gap="500">
         <InlineGrid columns={["280px", "1fr"]} gap="300">
           {/* 左侧：目的地 */}
@@ -254,10 +252,12 @@ export default function ShippingRateNew() {
             <BlockStack gap="300">
               <InlineStack align="space-between">
                 <Text as="h2" variant="headingMd">目的地</Text>
-                <ButtonGroup>
-                  <Button>导入</Button>
-                  <Button>导出</Button>
-                </ButtonGroup>
+                {ruleId ? (
+                  <ButtonGroup>
+                    <Button>导入</Button>
+                    <Button>导出</Button>
+                  </ButtonGroup>
+                ) : null}
               </InlineStack>
               <BlockStack gap="200">
                 <Text as="span" variant="bodySm">国家/地区</Text>
@@ -447,8 +447,13 @@ export default function ShippingRateNew() {
               </BlockStack>
 
               <InlineStack gap="300" align="end">
-                <Button url="/app">取消</Button>
-                <Button variant="primary" onClick={save} disabled={saving || (rangeErrors || []).some((e) => e && e.toError)}>
+                <Button url="/app" disabled={saving}>取消</Button>
+                <Button
+                  variant="primary"
+                  onClick={save}
+                  loading={saving}
+                  disabled={saving || (rangeErrors || []).some((e) => e && e.toError)}
+                >
                   保存
                 </Button>
               </InlineStack>

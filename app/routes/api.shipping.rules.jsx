@@ -50,6 +50,7 @@ export const action = async ({ request }) => {
 
   const payload = await request.json();
   const {
+    id = null,
     name = "",
     chargeBy = "weight",
     countries = [],
@@ -69,7 +70,43 @@ export const action = async ({ request }) => {
         .filter(Boolean)
     : [];
 
-  // Create rule with nested ranges
+  // 如果带有 id，则执行更新（需校验归属）
+  if (id) {
+    // 先查是否归属于当前店铺
+    const existing = await prisma.shippingRule.findFirst({ where: { id, shop }, include: { ranges: true } });
+    if (!existing) {
+      return json({ error: "未找到对应规则或无权限" }, { status: 404 });
+    }
+
+    // 事务：更新主表，重建子表 ranges
+    const [, updated] = await prisma.$transaction([
+      prisma.shippingRange.deleteMany({ where: { ruleId: id } }),
+      prisma.shippingRule.update({
+        where: { id },
+        data: {
+          name,
+          chargeBy,
+          countries: normalizedCountries,
+          description,
+          ranges: {
+            create: ranges.map((r) => ({
+              fromVal: Number(r.from ?? r.fromVal ?? 0),
+              toVal: Number(r.to ?? r.toVal ?? 0),
+              unit: r.unit || (chargeBy === "volume" ? "CBM" : chargeBy === "quantity" ? "件" : "KG"),
+              pricePer: Number(r.pricePer ?? 0),
+              fee: Number(r.fee ?? 0),
+              feeUnit: r.feeUnit || "CNY",
+            })),
+          },
+        },
+        include: { ranges: true },
+      }),
+    ]);
+
+    return json({ rule: updated, updated: true });
+  }
+
+  // 否则：创建
   const rule = await prisma.shippingRule.create({
     data: {
       shop,
@@ -91,5 +128,5 @@ export const action = async ({ request }) => {
     include: { ranges: true },
   });
 
-  return json({ rule });
+  return json({ rule, created: true });
 };
