@@ -89,6 +89,41 @@ export default function ShippingRateNew() {
     return parts.every((p) => hay.includes(p));
   };
 
+  // 导出：仅在有 ruleId 的详情页可用
+  const [exporting, setExporting] = useState(false);
+  const exportRule = async () => {
+    if (!ruleId) return;
+    try {
+      setExporting(true);
+      const resp = await fetch(`/api/shipping/export/${encodeURIComponent(ruleId)}`);
+      if (!resp.ok) {
+        const t = await resp.text();
+        throw new Error(t || `导出失败(${resp.status})`);
+      }
+      const blob = await resp.blob();
+      // 从响应头获取文件名
+      const cd = resp.headers.get("Content-Disposition") || "";
+      let fileName = "shipping-rule.csv";
+      const match = cd.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i);
+      if (match) {
+        fileName = decodeURIComponent(match[1] || match[2] || fileName);
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error("导出失败", e);
+      alert("导出失败，请稍后重试");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const [ranges, setRanges] = useState([]);
 
   // 初次进入时，如有草稿则预填表单
@@ -255,7 +290,7 @@ export default function ShippingRateNew() {
                 {ruleId ? (
                   <ButtonGroup>
                     <Button>导入</Button>
-                    <Button>导出</Button>
+                    <Button onClick={exportRule} loading={exporting}>导出</Button>
                   </ButtonGroup>
                 ) : null}
               </InlineStack>
