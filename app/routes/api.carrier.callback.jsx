@@ -81,7 +81,11 @@ export const action = async ({ request }) => {
 
   // Aggregate weight (kg), quantity (pcs)
   const items = Array.isArray(payload?.rate?.items) ? payload.rate.items : [];
-  const totalGrams = items.reduce((acc, it) => acc + (Number(it?.grams || 0)), 0);
+  const totalGrams = items.reduce((acc, it) => {
+    const gramsPerItem = Number(it?.grams || 0);
+    const qty = Number(it?.quantity || 0) || 1; // Shopify 行项目可能缺省 quantity，按 1 处理
+    return acc + gramsPerItem * qty;
+  }, 0);
   const totalKg = totalGrams / 1000;
   const totalQty = items.reduce((acc, it) => acc + (Number(it?.quantity || 0)), 0);
   // Volume not available by default; treat as 0 for now
@@ -147,6 +151,16 @@ export const action = async ({ request }) => {
   try {
     if (skipHmac) {
       console.log("[carrier.callback] DEV_SKIP_HMAC=true (dev mode)");
+    }
+    // 在开发模式下输出每个行项目的重量与数量明细，便于核对倍增逻辑
+    if (skipHmac && Array.isArray(items)) {
+      const debugItems = items.map((it) => ({
+        sku: it?.sku || it?.name || "",
+        grams: Number(it?.grams || 0),
+        quantity: Number(it?.quantity || 0) || 1,
+        lineGrams: Number(it?.grams || 0) * (Number(it?.quantity || 0) || 1),
+      }));
+      console.log("[carrier.callback] items breakdown=", debugItems);
     }
     console.log("[carrier.callback] shop=", shop,
       "destCountry=", destinationCountry,
