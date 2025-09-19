@@ -40,6 +40,24 @@ function verifyHmac(rawBody, hmac) {
   return crypto.timingSafeEqual(a, b);
 }
 
+// 将 kg 转换为指定单位的数值
+function convertKgToUnit(unit, kg) {
+  const u = String(unit || "KG").toUpperCase();
+  const val = Number(kg || 0);
+  switch (u) {
+    case "KG":
+      return val;
+    case "G":
+      return val * 1000;
+    case "LB":
+      return val * 2.20462262185; // 1 kg = 2.20462262185 lb
+    case "OZ":
+      return val * 35.2739619496; // 1 kg = 35.2739619496 oz
+    default:
+      return val; // 未识别则按 kg 处理
+  }
+}
+
 export const action = async ({ request }) => {
   const hmac = request.headers.get("x-shopify-hmac-sha256") || request.headers.get("X-Shopify-Hmac-Sha256");
   const shop = request.headers.get("x-shopify-shop-domain") || request.headers.get("X-Shopify-Shop-Domain");
@@ -91,27 +109,35 @@ export const action = async ({ request }) => {
   const rates = [];
   for (const rule of matchedRules) {
     const measure = rule.chargeBy;
-    const value = measure === "weight" ? totalKg : measure === "volume" ? totalCbm : totalQty;
-
-    // Find first matching range
-    // 为了让边界值（例如相邻区间的交界点）优先匹配“前一个区间”，
-    // 这里先按 fromVal 升序排序后再查找，这样 [0,10]、[10,20] 且都为闭区间时，value=10 会命中前者。
+    // 对重量：按每个区间的单位换算后进行匹配
+    let matchedRange = null;
+    let valueInMatchedUnit = 0;
+    // 为了让边界值优先命中前一个区间：先按 fromVal 升序
     const sortedRanges = [...(Array.isArray(rule.ranges) ? rule.ranges : [])]
       .sort((a, b) => Number(a.fromVal) - Number(b.fromVal));
-    const range = sortedRanges.find(
-      (rg) => value >= Number(rg.fromVal) && value <= Number(rg.toVal)
-    );
-    if (!range) continue;
+    for (const rg of sortedRanges) {
+      const v = measure === "weight"
+        ? convertKgToUnit(rg.unit || "KG", totalKg)
+        : measure === "volume"
+        ? totalCbm
+        : totalQty;
+      if (v >= Number(rg.fromVal) && v <= Number(rg.toVal)) {
+        matchedRange = rg;
+        valueInMatchedUnit = v;
+        break;
+      }
+    }
+    if (!matchedRange) continue;
 
     // price = pricePer * value + fee
-    const priceRmb = Number(range.pricePer) * Number(value) + Number(range.fee);
+    const priceRmb = Number(matchedRange.pricePer) * Number(valueInMatchedUnit) + Number(matchedRange.fee);
 
     // For simplicity: return currency as CNY, Shopify will display according to shop settings; Alternatively convert if needed
     rates.push({
       service_name: rule.name,
       service_code: `ECOCJ_${rule.id.slice(-6)}`,
       total_price: Math.max(0, Math.round(priceRmb * 100)).toString(), // cents
-      currency: currency || range.feeUnit || "CNY",
+      currency: currency || matchedRange.feeUnit || "CNY",
       description: rule.description || `${measure} based rate`,
       // min/max delivery date optional
     });

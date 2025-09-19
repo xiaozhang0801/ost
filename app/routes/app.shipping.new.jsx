@@ -216,11 +216,16 @@ export default function ShippingRateNew() {
   const isQuantity = chargeBy === "quantity";
   const rangeLabel = isWeight ? "重量范围" : isVolume ? "体积范围" : "件数范围";
   const unitOptions = isWeight
-    ? [{ label: "KG", value: "KG" }]
+    ? [
+        { label: "KG", value: "KG" },
+        { label: "G", value: "G" },
+        { label: "LB", value: "LB" },
+        { label: "OZ", value: "OZ" },
+      ]
     : isVolume
     ? [{ label: "CBM", value: "CBM" }]
     : [{ label: "件", value: "件" }];
-  const priceUnit = isWeight ? "KG" : isVolume ? "CBM" : "件";
+  const priceUnit = isWeight ? (ranges?.[0]?.unit || "KG") : isVolume ? "CBM" : "件";
 
   // 区间校验错误（例如：范围止 < 范围起）
   const [rangeErrors, setRangeErrors] = useState([]);
@@ -293,6 +298,15 @@ export default function ShippingRateNew() {
     setRanges((r) => (Array.isArray(r) && r.length > 1 ? r.filter((_, i) => i !== idx) : r));
   const updateRange = (idx, key, value) =>
     setRanges((r) => r.map((it, i) => (i === idx ? { ...it, [key]: value } : it)));
+
+  // 在按重量计费时，切换任意一处单位，统一整个表单区间的单位
+  const handleUnitChange = (idx, newUnit) => {
+    if (isWeight) {
+      setRanges((r) => (Array.isArray(r) ? r.map((it) => ({ ...it, unit: newUnit })) : r));
+    } else {
+      updateRange(idx, "unit", newUnit);
+    }
+  };
 
   // 当切换计费方式时，统一已有区间的单位
   useEffect(() => {
@@ -490,7 +504,7 @@ export default function ShippingRateNew() {
                               labelHidden
                               options={unitOptions}
                               value={rng.unit}
-                              onChange={(v) => updateRange(idx, "unit", v)}
+                              onChange={(v) => handleUnitChange(idx, v)}
                             />
                             <TextField
                               label="范围止"
@@ -508,7 +522,7 @@ export default function ShippingRateNew() {
                               labelHidden
                               options={unitOptions}
                               value={rng.unit}
-                              onChange={(v) => updateRange(idx, "unit", v)}
+                              onChange={(v) => handleUnitChange(idx, v)}
                             />
                           </InlineStack>
                         </BlockStack>
