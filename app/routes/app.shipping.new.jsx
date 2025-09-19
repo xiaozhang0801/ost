@@ -38,6 +38,12 @@ export const loader = async ({ request }) => {
     const json = await res.json();
     const countries = (Array.isArray(json) ? json : [])
       .map((c) => ({ label: c?.name?.common || c?.cca2 || "Unknown", value: c?.cca2 || "" }))
+      // 如果接口返回 Taiwan（或 TW），重命名为 Taiwan (Province of China)
+      .map((o) =>
+        o && (o.value === "TW" || o.label === "Taiwan")
+          ? { ...o, label: "Taiwan (Province of China)" }
+          : o
+      )
       .filter((o) => o.value)
       .sort((a, b) => a.label.localeCompare(b.label));
     __countries_cache = countries;
