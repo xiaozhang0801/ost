@@ -139,7 +139,7 @@ export default function ShippingRateNew() {
       }
       // 清空文件选择，避免同名文件无法再次选择
       if (fileInputRef.current) fileInputRef.current.value = "";
-      showNotice("导入成功：已更新表单，尚未保存到数据库", "success");
+      showNotice("导入成功：已更新表单，尚未保存", "success");
     } catch (err) {
       console.error("导入失败", err);
       showNotice("导入失败，请检查文件格式并重试", "critical");

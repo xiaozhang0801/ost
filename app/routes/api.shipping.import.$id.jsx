@@ -106,8 +106,12 @@ export const action = async ({ request, params }) => {
   const chargeBy = /^(weight|volume|quantity)$/i.test(methodCell) ? methodCell.toLowerCase() : existing.chargeBy;
 
   const countriesCell = String(dataRows[0][idx.countries] || "").trim();
+  // 支持英文逗号 , 与竖线 | 分隔（兼容历史导出的 |），也兼容全角逗号 ，
   const countries = countriesCell
-    ? countriesCell.split("|").map((s) => normalizeCountry(s)).filter(Boolean)
+    ? countriesCell
+        .split(/[|,，]/)
+        .map((s) => normalizeCountry(s))
+        .filter(Boolean)
     : [];
 
   const unitDefault = chargeBy === "volume" ? "CBM" : chargeBy === "quantity" ? "件" : "KG";

@@ -50,7 +50,7 @@ export const loader = async ({ request, params }) => {
         .map((c) => (typeof c === 'string' ? c : (c?.code || c?.value || c?.label || ''))) 
         .filter(Boolean)
     : [];
-  const countriesCell = countries.join("|"); // 用 | 连接，导入时再拆
+  const countriesCell = countries.join(","); // 用 , 连接（兼容导入时 , 和 |）
 
   // 导出前按 fromVal、toVal 升序排序，统一顺序
   const sortedRanges = [...(Array.isArray(rule.ranges) ? rule.ranges : [])]
