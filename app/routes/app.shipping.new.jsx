@@ -27,21 +27,27 @@ const COUNTRIES_TTL_MS = 24 * 60 * 60 * 1000; // 24小时
 
 export const loader = async ({ request }) => {
   await authenticate.admin(request);
+  const url = new URL(request.url);
+  const refreshCountries = url.searchParams.get("refreshCountries") === "1";
   const now = Date.now();
-  if (__countries_cache && now - __countries_cache_at < COUNTRIES_TTL_MS) {
+  if (!refreshCountries && __countries_cache && now - __countries_cache_at < COUNTRIES_TTL_MS) {
     return { countries: __countries_cache };
   }
   try {
     const res = await fetch(
-      "https://restcountries.com/v3.1/all?fields=name,cca2",
+      "https://restcountries.com/v3.1/all?fields=name,cca2,translations",
     );
     const json = await res.json();
     const countries = (Array.isArray(json) ? json : [])
-      .map((c) => ({ label: c?.name?.common || c?.cca2 || "Unknown", value: c?.cca2 || "" }))
+      .map((c) => ({
+        label: c?.name?.common || c?.cca2 || "Unknown",
+        value: c?.cca2 || "",
+        zh: c?.translations?.zho?.common || c?.name?.nativeName?.zho?.common || "",
+      }))
       // 如果接口返回 Taiwan（或 TW），重命名为 Taiwan (Province of China)
       .map((o) =>
         o && (o.value === "TW" || o.label === "Taiwan")
-          ? { ...o, label: "Taiwan (Province of China)" }
+          ? { ...o, label: "Taiwan (Province of China)", zh: o.zh || "中国台湾" }
           : o
       )
       .filter((o) => o.value)
@@ -86,13 +92,18 @@ export default function ShippingRateNew() {
     setCountriesSelected((Array.isArray(countries) ? countries : []).map((c) => c.value));
   const clearCountries = () => setCountriesSelected([]);
 
-  // 简单模糊匹配：大小写不敏感+去重音+分词（包含全部词）
+  // 简单模糊匹配：大小写不敏感+去重音+分词（包含全部词）+ 中文名称匹配
+  // 特殊别名增强（覆盖常见繁简/别写），当前仅对 TW 扩展
+  const COUNTRY_ALIASES = {
+    TW: ["台湾", "台灣", "臺灣", "中国台湾", "中國台灣", "中國臺灣"],
+  };
   const normalize = (s) => (s || "").toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const matchCountry = (item, query) => {
     const q = normalize(query).trim();
     if (!q) return true;
     const parts = q.split(/\s+/).filter(Boolean);
-    const hay = `${normalize(item.label)} ${normalize(item.value)}`;
+    const alias = COUNTRY_ALIASES[item.value] || [];
+    const hay = `${normalize(item.label)} ${normalize(item.value)} ${normalize(item.zh)} ${normalize(alias.join(" "))}`;
     return parts.every((p) => hay.includes(p));
   };
 
@@ -438,7 +449,10 @@ export default function ShippingRateNew() {
                     (Array.isArray(countries) ? countries : []).filter((o) => matchCountry(o, countryInput))
                   }
                   selected={countriesSelected}
-                  onSelect={setCountriesSelected}
+                  onSelect={(sel) => {
+                    setCountriesSelected(sel);
+                    setCountryInput("");
+                  }}
                   listTitle="国家/地区"
                   textField={
                     <Autocomplete.TextField
