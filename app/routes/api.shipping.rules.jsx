@@ -29,7 +29,8 @@ function normalizeCountry(input) {
 function validateRangesForCharge(ranges, chargeBy) {
   const errs = [];
   const isQuantity = chargeBy === "quantity";
-  (Array.isArray(ranges) ? ranges : []).forEach((r, idx) => {
+  const list = Array.isArray(ranges) ? ranges : [];
+  list.forEach((r, idx) => {
     const a = Number(r.fromVal ?? r.from ?? 0);
     const b = Number(r.toVal ?? r.to ?? 0);
     if (Number.isNaN(a) || Number.isNaN(b)) {
@@ -57,6 +58,14 @@ function validateRangesForCharge(ranges, chargeBy) {
       errs.push({ index: idx, message: "挂号费必须为非负数" });
     }
   });
+  // 跨段校验：第 i 段的起始值必须 ≥ 第 i-1 段的最大值（假定已按 fromVal、toVal 排序）
+  for (let i = 1; i < list.length; i++) {
+    const prevTo = Number(list[i - 1].toVal ?? list[i - 1].to ?? 0);
+    const currFrom = Number(list[i].fromVal ?? list[i].from ?? 0);
+    if (!Number.isNaN(prevTo) && !Number.isNaN(currFrom) && currFrom < prevTo) {
+      errs.push({ index: i, message: "范围起必须≥上一区间的范围止" });
+    }
+  }
   return errs;
 }
 

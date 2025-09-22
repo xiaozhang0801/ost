@@ -277,16 +277,27 @@ export default function ShippingRateNew() {
     [isQuantity]
   );
 
-  // 计算区间错误：范围止必须 >= 范围起
+  // 计算区间错误：
+  // 1) 同段内：范围止必须 ≥ 范围起
+  // 2) 跨段：第 i 段的范围起必须 ≥ 第 i-1 段的范围止
   useEffect(() => {
-    const errs = (Array.isArray(ranges) ? ranges : []).map((r) => {
+    const list = Array.isArray(ranges) ? ranges : [];
+    const errs = list.map((r, idx) => {
       const a = parseValue(r.from);
       const b = parseValue(r.to);
       let toError;
+      let fromError;
       if (a !== null && b !== null && b < a) {
         toError = "范围止必须≥范围起";
       }
-      return { toError };
+      if (idx > 0) {
+        const prev = list[idx - 1];
+        const prevTo = parseValue(prev?.to);
+        if (prevTo !== null && a !== null && a < prevTo) {
+          fromError = "范围起必须≥上一区间的范围止";
+        }
+      }
+      return { toError, fromError };
     });
     setRangeErrors(errs);
   }, [ranges, parseValue]);
@@ -294,17 +305,21 @@ export default function ShippingRateNew() {
   // 上文已声明（此处删除重复定义）
 
   const addRange = () =>
-    setRanges((r) => [
-      ...r,
-      {
-        from: "",
-        to: "",
-        unit: isWeight ? "KG" : isVolume ? "CBM" : "件",
-        pricePer: "",
-        fee: "",
-        feeUnit: "USD",
-      },
-    ]);
+    setRanges((r) => {
+      const last = Array.isArray(r) && r.length ? r[r.length - 1] : null;
+      const defaultFrom = last?.to ?? "";
+      return [
+        ...(Array.isArray(r) ? r : []),
+        {
+          from: defaultFrom,
+          to: "",
+          unit: isWeight ? "KG" : isVolume ? "CBM" : "件",
+          pricePer: "",
+          fee: "",
+          feeUnit: "USD",
+        },
+      ];
+    });
   const removeRange = (idx) =>
     setRanges((r) => (Array.isArray(r) && r.length > 1 ? r.filter((_, i) => i !== idx) : r));
   const updateRange = (idx, key, value) =>
@@ -553,6 +568,7 @@ export default function ShippingRateNew() {
                               type="number"
                               min={isQuantity ? 1 : 0}
                               step={isQuantity ? 1 : "any"}
+                              error={rangeErrors?.[idx]?.fromError}
                             />
                             <Select
                               label="单位"
@@ -631,7 +647,9 @@ export default function ShippingRateNew() {
                   variant="primary"
                   onClick={save}
                   loading={saving}
-                  disabled={saving || (rangeErrors || []).some((e) => e && e.toError)}
+                  disabled={
+                    saving || (rangeErrors || []).some((e) => (e && (e.toError || e.fromError)))
+                  }
                 >
                   保存
                 </Button>
