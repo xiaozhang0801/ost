@@ -25,6 +25,41 @@ function normalizeCountry(input) {
   return map[key] || up;
 }
 
+// 校验区间有效性：返回错误数组（含索引与消息）
+function validateRangesForCharge(ranges, chargeBy) {
+  const errs = [];
+  const isQuantity = chargeBy === "quantity";
+  (Array.isArray(ranges) ? ranges : []).forEach((r, idx) => {
+    const a = Number(r.fromVal ?? r.from ?? 0);
+    const b = Number(r.toVal ?? r.to ?? 0);
+    if (Number.isNaN(a) || Number.isNaN(b)) {
+      errs.push({ index: idx, message: "范围起止必须为数字" });
+      return;
+    }
+    if (b < a) {
+      errs.push({ index: idx, message: "范围止必须≥范围起" });
+    }
+    if (isQuantity) {
+      if (!Number.isInteger(a) || !Number.isInteger(b) || a < 1 || b < 1) {
+        errs.push({ index: idx, message: "按件计费时范围必须为≥1的整数" });
+      }
+    } else {
+      if (a < 0 || b < 0) {
+        errs.push({ index: idx, message: "范围不得为负数" });
+      }
+    }
+    const pricePer = Number(r.pricePer ?? 0);
+    const fee = Number(r.fee ?? 0);
+    if (pricePer < 0 || Number.isNaN(pricePer)) {
+      errs.push({ index: idx, message: "运费单价必须为非负数" });
+    }
+    if (fee < 0 || Number.isNaN(fee)) {
+      errs.push({ index: idx, message: "挂号费必须为非负数" });
+    }
+  });
+  return errs;
+}
+
 export const loader = async ({ request }) => {
   const { session } = await authenticate.admin(request);
   const shop = session?.shop;
@@ -58,8 +93,10 @@ export const action = async ({ request }) => {
     ranges = [],
   } = payload || {};
 
-  if (!name || !Array.isArray(ranges) || ranges.length === 0) {
-    return json({ error: "参数不完整" }, { status: 400 });
+  const normName = String(name || "").trim();
+
+  if (!normName || !Array.isArray(ranges) || ranges.length === 0) {
+    return json({ error: "参数不完整", code: "BAD_REQUEST" }, { status: 400 });
   }
 
   // 标准化国家列表：支持字符串或对象格式
@@ -78,6 +115,19 @@ export const action = async ({ request }) => {
       return json({ error: "未找到对应规则或无权限" }, { status: 404 });
     }
 
+    // 名称唯一性校验：同一店铺下，不允许与其他规则重名
+    const conflict = await prisma.shippingRule.findFirst({
+      where: {
+        shop,
+        name: normName,
+        id: { not: id },
+      },
+      select: { id: true },
+    });
+    if (conflict) {
+      return json({ error: "名称已存在，请修改后再保存", code: "NAME_DUPLICATE" }, { status: 409 });
+    }
+
     // 事务：更新主表，重建子表 ranges
     // 先对 ranges 做标准化与排序（fromVal 升序，若相同再按 toVal 升序）
     const normalizedSortedRanges = (Array.isArray(ranges) ? ranges : [])
@@ -91,12 +141,18 @@ export const action = async ({ request }) => {
       }))
       .sort((a, b) => (a.fromVal - b.fromVal) || (a.toVal - b.toVal));
 
+    // 服务端区间校验（与前端一致），失败返回 422 并附带 fieldErrors
+    const rangeErrors = validateRangesForCharge(normalizedSortedRanges, chargeBy);
+    if (Array.isArray(rangeErrors) && rangeErrors.length > 0) {
+      return json({ error: "区间设置不合法", code: "INVALID_RANGES", fieldErrors: { ranges: rangeErrors } }, { status: 422 });
+    }
+
     const [, updated] = await prisma.$transaction([
       prisma.shippingRange.deleteMany({ where: { ruleId: id } }),
       prisma.shippingRule.update({
         where: { id },
         data: {
-          name,
+          name: normName,
           chargeBy,
           countries: normalizedCountries,
           description,
@@ -124,10 +180,25 @@ export const action = async ({ request }) => {
     }))
     .sort((a, b) => (a.fromVal - b.fromVal) || (a.toVal - b.toVal));
 
+  // 名称唯一性校验（创建）：同店铺不允许重名
+  const existsSameName = await prisma.shippingRule.findFirst({
+    where: { shop, name: normName },
+    select: { id: true },
+  });
+  if (existsSameName) {
+    return json({ error: "名称已存在，请修改后再保存", code: "NAME_DUPLICATE" }, { status: 409 });
+  }
+
+  // 服务端区间校验（与前端一致），失败返回 422 并附带 fieldErrors
+  const createRangeErrors = validateRangesForCharge(normalizedSortedRangesCreate, chargeBy);
+  if (Array.isArray(createRangeErrors) && createRangeErrors.length > 0) {
+    return json({ error: "区间设置不合法", code: "INVALID_RANGES", fieldErrors: { ranges: createRangeErrors } }, { status: 422 });
+  }
+
   const rule = await prisma.shippingRule.create({
     data: {
       shop,
-      name,
+      name: normName,
       chargeBy,
       countries: normalizedCountries,
       description,

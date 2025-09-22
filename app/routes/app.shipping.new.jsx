@@ -315,13 +315,24 @@ export default function ShippingRateNew() {
   }, [isWeight, isVolume, isQuantity]);
 
   const [saving, setSaving] = useState(false);
+  const [ruleNameError, setRuleNameError] = useState("");
   const save = async () => {
-    if (!ruleName || !Array.isArray(ranges) || ranges.length === 0) return;
+    const normName = String(ruleName || "").trim();
+    if (!normName) {
+      setRuleNameError("名称不能为空");
+      showNotice("名称不能为空", "critical");
+      return;
+    }
+    if (!Array.isArray(ranges) || ranges.length === 0) {
+      showNotice("请至少添加一条区间", "critical");
+      return;
+    }
     try {
       setSaving(true);
+      setRuleNameError("");
       const payload = {
         ...(ruleId ? { id: ruleId } : {}),
-        name: ruleName,
+        name: normName,
         chargeBy,
         countries: countriesSelected,
         description: null,
@@ -340,8 +351,37 @@ export default function ShippingRateNew() {
         body: JSON.stringify(payload),
       });
       if (!resp.ok) {
-        const t = await resp.text();
-        throw new Error(t || `保存失败(${resp.status})`);
+        // 优先尝试 JSON 错误
+        let msg = "";
+        try {
+          const data = await resp.json();
+          msg = data?.error || "";
+        } catch (_) {
+          try {
+            msg = await resp.text();
+          } catch (_) {}
+        }
+        const code = resp.status;
+        if (code === 409) {
+          setRuleNameError(msg || "名称已存在，请修改后再保存");
+          showNotice(msg || "名称已存在，请修改后再保存", "critical");
+          return;
+        }
+        if (code === 400) {
+          showNotice(msg || "参数不完整，请检查后重试", "critical");
+          return;
+        }
+        if (code === 401) {
+          showNotice("未授权或会话失效，请刷新页面后重试", "critical");
+          return;
+        }
+        if (code === 404) {
+          showNotice(msg || "未找到对应规则或无权限", "critical");
+          return;
+        }
+        // 其他错误
+        showNotice(msg || `保存失败(${code})，请重试`, "critical");
+        return;
       }
       // 保存成功后返回列表页，并传递一次性提示信息
       navigate("/app", { state: { toast: { message: "保存成功", tone: "success" } } });
@@ -451,6 +491,7 @@ export default function ShippingRateNew() {
                   onChange={setRuleName}
                   autoComplete="off"
                   placeholder="请输入规则名称"
+                  error={ruleNameError || undefined}
                 />
               </BlockStack>
               <InlineStack gap="400">

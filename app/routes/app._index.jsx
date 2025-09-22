@@ -16,7 +16,7 @@ import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
 import prisma from "../db.server";
 import { json } from "@remix-run/node";
-import { DeleteIcon } from "@shopify/polaris-icons";
+import { DeleteIcon, DuplicateIcon } from "@shopify/polaris-icons";
 
 export const loader = async ({ request }) => {
   const { admin, session } = await authenticate.admin(request);
@@ -314,6 +314,25 @@ export default function Index() {
     setConfirmOpen(true);
   };
 
+  // 复制：跳转到新建详情页，数据与原规则一致，但不带 id（保存即新增）
+  const onCopy = (rate) => {
+    const draft = {
+      id: null,
+      ruleName: rate.title || "",
+      calcType: rate.calcType || "custom",
+      chargeBy: rate.chargeBy || "weight",
+      countriesSelected: Array.isArray(rate.countriesSelected) ? rate.countriesSelected : [],
+      ranges: Array.isArray(rate.ranges) && rate.ranges.length
+        ? rate.ranges
+        : [
+            { from: "0", to: "0.5", unit: "KG", pricePer: "100", fee: "20", feeUnit: "USD" },
+            { from: "0.5", to: "1", unit: "KG", pricePer: "90", fee: "20", feeUnit: "USD" },
+          ],
+      description: rate.description || "",
+    };
+    navigate("/app/shipping/new", { state: { draft } });
+  };
+
   const onBatchDelete = () => {
     const ids = Array.from(selected).map((idx) => String(rates[idx]?.id)).filter(Boolean);
     if (ids.length === 0) return;
@@ -482,16 +501,25 @@ export default function Index() {
                     </BlockStack>
                   </InlineStack>
 
-                  {/* 右侧：删除图标按钮 */}
+                  {/* 右侧：复制 + 删除 图标按钮 */}
                   <Box onClick={(e) => e.stopPropagation()}>
-                    <Button
-                      variant="plain"
-                      tone="critical"
-                      icon={DeleteIcon}
-                      accessibilityLabel="删除运费规则"
-                      onClick={() => onDelete(rate.id)}
-                      disabled={fetcher.state !== "idle"}
-                    />
+                    <InlineStack gap="100" blockAlign="center">
+                      <Button
+                        variant="plain"
+                        icon={DuplicateIcon}
+                        accessibilityLabel="复制运费规则"
+                        onClick={() => onCopy(rate)}
+                        disabled={fetcher.state !== "idle"}
+                      />
+                      <Button
+                        variant="plain"
+                        tone="critical"
+                        icon={DeleteIcon}
+                        accessibilityLabel="删除运费规则"
+                        onClick={() => onDelete(rate.id)}
+                        disabled={fetcher.state !== "idle"}
+                      />
+                    </InlineStack>
                   </Box>
                 </InlineStack>
                 </Box>
