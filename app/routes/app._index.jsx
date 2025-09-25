@@ -375,7 +375,7 @@ export default function Index() {
 
   return (
     <Page>
-      <TitleBar title="Table Rates Shipping" />
+      <TitleBar title="ost运费系统" />
       <BlockStack gap="500">
         {/* 全局结果提示（置于标题上方） */}
         {bannerMsg && (
@@ -389,15 +389,15 @@ export default function Index() {
         <InlineStack align="space-between" blockAlign="center">
           <InlineStack gap="300" blockAlign="center">
             <Text as="h1" variant="headingLg">
-              运费管理2
+              运费管理
             </Text>
             {/* <Badge>
               运费管理
             </Badge> */}
           </InlineStack>
           <InlineStack gap="300" blockAlign="center">
-            <Button url={`/app/api/carriers${data?.shop ? `?shop=${encodeURIComponent(data.shop)}` : ""}`}>查看 CarrierService</Button>
-            <Button url={`/app/api/carriers/ensure${data?.shop ? `?shop=${encodeURIComponent(data.shop)}` : ""}`}>强制创建 CarrierService</Button>
+            {/* <Button url={`/app/api/carriers${data?.shop ? `?shop=${encodeURIComponent(data.shop)}` : ""}`}>查看 CarrierService</Button>
+            <Button url={`/app/api/carriers/ensure${data?.shop ? `?shop=${encodeURIComponent(data.shop)}` : ""}`}>强制创建 CarrierService</Button> */}
             <Button
               variant="primary"
               url="/app/shipping/new"
@@ -424,7 +424,7 @@ export default function Index() {
                   >
                     立即添加运费规则
                   </Button>
-                  <Button url={`/app/api/carriers${data?.shop ? `?shop=${encodeURIComponent(data.shop)}` : ""}`}>查看 CarrierService</Button>
+                  {/* <Button url={`/app/api/carriers${data?.shop ? `?shop=${encodeURIComponent(data.shop)}` : ""}`}>查看 CarrierService</Button> */}
                 </InlineStack>
               </BlockStack>
             </Box>
