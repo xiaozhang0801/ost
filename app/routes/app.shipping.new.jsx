@@ -51,10 +51,10 @@ export const loader = async ({ request }) => {
           return { ...o, label: "Taiwan (Province of China)", zh: o.zh || "中国台湾" };
         }
         if (o.value === "HK" || o.label === "Hong Kong") {
-          return { ...o, label: "Hong Kong (Province of China)", zh: o.zh || "中国香港" };
+          return { ...o, label: "Hong Kong,China)", zh: o.zh || "中国香港" };
         }
         if (o.value === "MO" || o.label === "Macao" || o.label === "Macau") {
-          return { ...o, label: "Macao (Province of China)", zh: o.zh || "中国澳门" };
+          return { ...o, label: "Macao,China)", zh: o.zh || "中国澳门" };
         }
         return o;
       })
