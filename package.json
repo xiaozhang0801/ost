@@ -1,5 +1,5 @@
 {
-  "name": "ecocj",
+  "name": "ost",
   "private": true,
   "scripts": {
     "build": "remix vite:build",

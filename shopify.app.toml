@@ -1,8 +1,8 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
-client_id = "be58cea83443888ed4ec553623f7434b"
-name = "ecocj"
-application_url = "https://triple-lcd-industry-impacts.trycloudflare.com"
+client_id = "f29a6a1ba00d2db86f69e0559c230dd1"
+name = "ost"
+application_url = "https://potatoes-funky-ipod-linda.trycloudflare.com"
 embedded = true
 
 [build]
@@ -25,4 +25,4 @@ api_version = "2025-10"
 scopes = "write_products,read_shipping,write_shipping"
 
 [auth]
-redirect_urls = [ "https://triple-lcd-industry-impacts.trycloudflare.com/auth/callback" ]
+redirect_urls = ["https://potatoes-funky-ipod-linda.trycloudflare.com/auth/callback", "https://potatoes-funky-ipod-linda.trycloudflare.com/auth/shopify/callback", "https://potatoes-funky-ipod-linda.trycloudflare.com/api/auth/callback"]
