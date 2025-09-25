@@ -389,7 +389,7 @@ export default function Index() {
         <InlineStack align="space-between" blockAlign="center">
           <InlineStack gap="300" blockAlign="center">
             <Text as="h1" variant="headingLg">
-              运费管理
+              运费管理1
             </Text>
             {/* <Badge>
               运费管理
