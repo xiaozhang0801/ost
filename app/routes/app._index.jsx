@@ -27,7 +27,9 @@ export const loader = async ({ request }) => {
     // List all carrier services via generic REST client
     const listResp = await admin.rest.get({ path: 'carrier_services.json' });
     const services = listResp?.body?.carrier_services || [];
-    const NAME = "ECOCJ Carrier";
+    const NAME = process.env.CARRIER_SERVICE_NAME && process.env.CARRIER_SERVICE_NAME.trim().length > 0
+      ? process.env.CARRIER_SERVICE_NAME.trim()
+      : "ECOCJ Carrier";
     const origin = process.env.SHOPIFY_APP_URL && process.env.SHOPIFY_APP_URL.trim().length > 0
       ? process.env.SHOPIFY_APP_URL
       : new URL(request.url).origin;

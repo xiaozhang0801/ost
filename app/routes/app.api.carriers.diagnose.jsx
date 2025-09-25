@@ -16,7 +16,6 @@ export const loader = async ({ request }) => {
 
   // 读取 CarrierService 列表（两种方式，合并去重）
   let servicesRaw = [];
-  let servicesRes = [];
   let restDiagnostics = { hasRest: !!admin?.rest };
   try {
     const listResp = await admin.rest.get({ path: 'carrier_services.json' });
@@ -24,16 +23,8 @@ export const loader = async ({ request }) => {
   } catch (e) {
     restDiagnostics.rawError = e?.message || String(e);
   }
-  try {
-    if (admin?.rest?.resources?.CarrierService?.all) {
-      const list2 = await admin.rest.resources.CarrierService.all({});
-      servicesRes = Array.isArray(list2?.data) ? list2.data : list2?.carrier_services || [];
-    } else {
-      restDiagnostics.noResourcesApi = true;
-    }
-  } catch (e) {
-    restDiagnostics.resourcesError = e?.message || String(e);
-  }
+  // 为避免因 SDK 差异导致的报错，这里不再调用 admin.rest.resources.* API
+  restDiagnostics.note = "diagnose uses only admin.rest.get(carrier_services.json)";
   // 合并
   const normalizeItem = (s) => ({
     id: s.id,
@@ -42,7 +33,7 @@ export const loader = async ({ request }) => {
     service_discovery: s.service_discovery,
   });
   const mergedMap = new Map();
-  [...servicesRaw, ...servicesRes].forEach((s) => {
+  [...servicesRaw].forEach((s) => {
     if (!s) return;
     const id = s.id || s.admin_graphql_api_id || `${s.name}-${s.callback_url}`;
     if (!mergedMap.has(id)) mergedMap.set(id, normalizeItem(s));
