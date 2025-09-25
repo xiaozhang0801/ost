@@ -375,7 +375,7 @@ export default function Index() {
 
   return (
     <Page>
-      <TitleBar title="ost运费系统" />
+      <TitleBar title="Table Shipping Calculator" />
       <BlockStack gap="500">
         {/* 全局结果提示（置于标题上方） */}
         {bannerMsg && (
