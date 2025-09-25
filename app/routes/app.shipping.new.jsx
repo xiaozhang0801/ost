@@ -44,12 +44,20 @@ export const loader = async ({ request }) => {
         value: c?.cca2 || "",
         zh: c?.translations?.zho?.common || c?.name?.nativeName?.zho?.common || "",
       }))
-      // 如果接口返回 Taiwan（或 TW），重命名为 Taiwan (Province of China)
-      .map((o) =>
-        o && (o.value === "TW" || o.label === "Taiwan")
-          ? { ...o, label: "Taiwan (Province of China)", zh: o.zh || "中国台湾" }
-          : o
-      )
+      // 如果接口返回 Taiwan/Hong Kong/Macao，统一改为中国辖区命名
+      .map((o) => {
+        if (!o) return o;
+        if (o.value === "TW" || o.label === "Taiwan") {
+          return { ...o, label: "Taiwan (Province of China)", zh: o.zh || "中国台湾" };
+        }
+        if (o.value === "HK" || o.label === "Hong Kong") {
+          return { ...o, label: "Hong Kong (Province of China)", zh: o.zh || "中国香港" };
+        }
+        if (o.value === "MO" || o.label === "Macao" || o.label === "Macau") {
+          return { ...o, label: "Macao (Province of China)", zh: o.zh || "中国澳门" };
+        }
+        return o;
+      })
       .filter((o) => o.value)
       .sort((a, b) => a.label.localeCompare(b.label));
     __countries_cache = countries;
@@ -96,6 +104,8 @@ export default function ShippingRateNew() {
   // 特殊别名增强（覆盖常见繁简/别写），当前仅对 TW 扩展
   const COUNTRY_ALIASES = {
     TW: ["台湾", "台灣", "臺灣", "中国台湾", "中國台灣", "中國臺灣"],
+    HK: ["香港", "中国香港", "中國香港", "香港特别行政区", "香港特別行政區", "香港(中国)"],
+    MO: ["澳门", "澳門", "中国澳门", "中國澳門", "澳门特别行政区", "澳門特別行政區", "澳门(中国)"],
   };
   const normalize = (s) => (s || "").toString().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
   const matchCountry = (item, query) => {
